@@ -55,28 +55,6 @@ public class PracticeController {
     }
 
     // 북마크한 문제 가져오기
-//    @GetMapping("/bookmarks/{subjectName}")
-//    public ResponseEntity<List<BookmarkDTO>> getBookmarks(@PathVariable String subjectName,
-//                                                          @RequestHeader("Authorization") String authorizationHeader) {
-//
-//        String token = authorizationHeader.replace("Bearer ", "");
-//        String username = jwtTokenProvider.getUsernameFromToken(token);
-//
-//        log.info("username: {}", username);
-//        log.info("subjectName: {}", subjectName);
-//
-//
-//        List<BookmarkDTO> bookmarkList = practiceService.getSubjectBookmarks(username, subjectName);
-//
-//        if (bookmarkList == null || bookmarkList.isEmpty()) {
-//            log.info("북마크 정보가 없습니다");
-//            return ResponseEntity.status(204).build();
-//        }
-//
-//        log.info("북마크 정보를 가져왔습니다. {}", bookmarkList);
-//        return ResponseEntity.status(200).body(bookmarkList);
-//    }
-
     @GetMapping("/bookmarks/{subjectName}")
     public ResponseEntity<List<BookmarkDTO>> getBookmarks(@PathVariable String subjectName,
                                                           @RequestHeader("Authorization") String authorizationHeader) {
