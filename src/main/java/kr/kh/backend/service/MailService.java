@@ -15,7 +15,6 @@ public class MailService {
     private final JavaMailSender mailSender;
 
     public void sendEmail(String toEmail, String title, String content) {
-//        SimpleMailMessage emailForm = new SimpleMailMessage();
         SimpleMailMessage emailForm = createEmail(toEmail, title, content); // 메시지 생성
 
 

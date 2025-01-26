@@ -3,6 +3,7 @@ package kr.kh.backend.controller;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.swagger.v3.oas.annotations.Operation;
 import kr.kh.backend.dto.BookmarkDTO;
 import kr.kh.backend.dto.PracticeComplaintsDTO;
 import kr.kh.backend.security.jwt.JwtTokenProvider;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
