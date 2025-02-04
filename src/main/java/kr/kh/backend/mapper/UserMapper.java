@@ -11,6 +11,10 @@ import java.util.List;
 @Mapper
 public interface UserMapper {
 
+    // 테스트용 쿼리문
+    @Select("SELECT * FROM user")
+    List<User> findAll();
+
     @Select("SELECT * FROM user WHERE nickname = #{username}")
     User findByUsername(String username);
 

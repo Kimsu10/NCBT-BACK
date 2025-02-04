@@ -7,6 +7,7 @@ import kr.kh.backend.exception.CustomException;
 import kr.kh.backend.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -26,6 +28,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
@@ -59,6 +62,9 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
                 + "&client_id=" + naverClientId + "&client_secret=" + naverClientSecret
                 + "&code=" + code + "&state=" + state;
         Map<String, String> naverToken = restTemplate.getForObject(getTokenUrl, Map.class);
+        if (naverToken == null || !naverToken.containsKey("access_token")) {
+            throw new CustomException("SUPPLIER CODE ERROR", "The Code is unvalid or empty", HttpStatus.BAD_REQUEST);
+        }
         String naverAccessToken = naverToken.get("access_token");
 
         // 접근 코드로 사용자의 로그인 정보 획득
@@ -124,57 +130,63 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
         RequestEntity<Void> requestEntity =
                 RequestEntity.post(uri)
                         .header("Accept", "application/json").build();
-        // restTemplate 으로 POST 요청하여 access token 을 얻는다.
-        ResponseEntity<GithubLoginDTO> response =
-                restTemplate.exchange(requestEntity, GithubLoginDTO.class);
-        String githubAccessToken = response.getBody().getAccess_token();
 
-        // access token 을 사용하여 사용자의 로그인 정보 획득
-        String getUserUrl = "https://api.github.com/user";
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + githubAccessToken);
-        HttpEntity<String> requestUser = new HttpEntity<>(null, headers);
-        ResponseEntity<GithubUserDTO> githubResponse = restTemplate.exchange(getUserUrl, HttpMethod.GET, requestUser, GithubUserDTO.class);
-        GithubUserDTO githubUser = githubResponse.getBody();
+        try {
+            // restTemplate 으로 POST 요청하여 access token 을 얻는다.
+            ResponseEntity<GithubLoginDTO> response =
+                    restTemplate.exchange(requestEntity, GithubLoginDTO.class);
+            String githubAccessToken = response.getBody().getAccess_token();
 
-        // 깃허브는 이메일 정보는 따로 요청해야 한다...
-        String getEmailUrl = "https://api.github.com/user/emails";
-        HttpEntity<String> requestEmail = new HttpEntity<>(null, headers);
-        ResponseEntity<List<GithubEmailDTO>> emailResponse = restTemplate.exchange(getEmailUrl, HttpMethod.GET, requestEmail, new ParameterizedTypeReference<List<GithubEmailDTO>>() {});
-        List<GithubEmailDTO> emails = emailResponse.getBody();
-        String primaryEmail = emails.isEmpty() ? "이메일 없음" : emails.get(0).getEmail();
+            // access token 을 사용하여 사용자의 로그인 정보 획득
+            String getUserUrl = "https://api.github.com/user";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + githubAccessToken);
+            HttpEntity<String> requestUser = new HttpEntity<>(null, headers);
+            ResponseEntity<GithubUserDTO> githubResponse = restTemplate.exchange(getUserUrl, HttpMethod.GET, requestUser, GithubUserDTO.class);
+            GithubUserDTO githubUser = githubResponse.getBody();
 
-        // 깃허브 사용자 정보가 디비에 있는지 확인
-        if(githubUser != null) {
-            String username = githubUser.getName();
-            String email = primaryEmail;
-            String role = "USER";
+            // 깃허브는 이메일 정보는 따로 요청해야 한다...
+            String getEmailUrl = "https://api.github.com/user/emails";
+            HttpEntity<String> requestEmail = new HttpEntity<>(null, headers);
+            ResponseEntity<List<GithubEmailDTO>> emailResponse = restTemplate.exchange(getEmailUrl, HttpMethod.GET, requestEmail, new ParameterizedTypeReference<List<GithubEmailDTO>>() {
+            });
+            List<GithubEmailDTO> emails = emailResponse.getBody();
+            String primaryEmail = emails.isEmpty() ? "이메일 없음" : emails.get(0).getEmail();
 
-            User user = userMapper.findByEmail(email);
-            if(user == null) {
-                user = User.builder()
-                        .nickname(username)
-                        .email(email)
-                        .platform("github")
-                        .roles(role)
-                        .build();
-                userMapper.insertOauthUser(user);
-                log.info("새로운 oauth2 유저를 등록했습니다 : {}", user);
+            // 깃허브 사용자 정보가 디비에 있는지 확인
+            if (githubUser != null) {
+                String username = githubUser.getName();
+                String email = primaryEmail;
+                String role = "USER";
+
+                User user = userMapper.findByEmail(email);
+                if (user == null) {
+                    user = User.builder()
+                            .nickname(username)
+                            .email(email)
+                            .platform("github")
+                            .roles(role)
+                            .build();
+                    userMapper.insertOauthUser(user);
+                    log.info("새로운 oauth2 유저를 등록했습니다 : {}", user);
+                }
+
+                if (user != null && user.getPlatform() == null) {
+                    log.info("이미 등록된 이메일입니다.");
+                    throw new CustomException("이미 등록된 이메일입니다.", "ERROR CODE 401", HttpStatus.UNAUTHORIZED);
+                }
+
+                Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                log.info("oauth2 유저가 인증되었습니다 = {}", authentication);
+
+                return authentication;
+            } else {
+                log.info("깃허브 사용자의 정보를 확인할 수 없습니다.");
+                return null;
             }
-
-            if (user != null && user.getPlatform() == null) {
-                log.info("이미 등록된 이메일입니다.");
-                throw new CustomException("이미 등록된 이메일입니다.", "ERROR CODE 401", HttpStatus.UNAUTHORIZED);
-            }
-
-            Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            log.info("oauth2 유저가 인증되었습니다 = {}", authentication);
-
-            return authentication;
-        } else {
-            log.info("깃허브 사용자의 정보를 확인할 수 없습니다.");
-            return null;
+        } catch (HttpClientErrorException e) {
+            throw new CustomException("SUPPLIER CODE ERROR", "The Code is unvalid or empty", HttpStatus.BAD_REQUEST);
         }
     }
 

@@ -25,7 +25,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<?> handleCustomException(CustomException ex) {
-        // CustomException 은 전부 Auth 관련 에러
-        return ResponseEntity.status(401).body(ex.getMessage());
+        return ResponseEntity.status(ex.getHttpStatus()).body(ex.getMessage());
     }
 }
