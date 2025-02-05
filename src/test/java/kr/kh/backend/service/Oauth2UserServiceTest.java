@@ -14,7 +14,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Map;
 
@@ -54,10 +56,10 @@ public class Oauth2UserServiceTest {
                     Assertions.assertEquals("SUPPLIER CODE ERROR", exception.getMessage());
                 },
                 () -> {
-                    Throwable exception = Assertions.assertThrows(CustomException.class, () -> {
+                    HttpClientErrorException exception = Assertions.assertThrows(HttpClientErrorException.class, () -> {
                         oauth2UserService.getGithubUser(accessCode);
                     });
-                    Assertions.assertEquals("SUPPLIER CODE ERROR", exception.getMessage());
+                    Assertions.assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
                 }
         );
     }

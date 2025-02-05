@@ -108,41 +108,37 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
                 RequestEntity.post(uri)
                         .header("Accept", "application/json").build();
 
-        try {
-            // restTemplate 으로 POST 요청하여 access token 을 얻는다.
-            ResponseEntity<GithubLoginDTO> response =
-                    restTemplate.exchange(requestEntity, GithubLoginDTO.class);
-            String githubAccessToken = response.getBody().getAccess_token();
+        // restTemplate 으로 POST 요청하여 access token 을 얻는다.
+        ResponseEntity<GithubLoginDTO> response =
+                restTemplate.exchange(requestEntity, GithubLoginDTO.class);
+        String githubAccessToken = response.getBody().getAccess_token();
 
-            // access token 을 사용하여 사용자의 로그인 정보 획득
-            String getUserUrl = "https://api.github.com/user";
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + githubAccessToken);
-            HttpEntity<String> requestUser = new HttpEntity<>(null, headers);
-            ResponseEntity<GithubUserDTO> githubResponse = restTemplate.exchange(getUserUrl, HttpMethod.GET, requestUser, GithubUserDTO.class);
-            GithubUserDTO githubUser = githubResponse.getBody();
+        // access token 을 사용하여 사용자의 로그인 정보 획득
+        String getUserUrl = "https://api.github.com/user";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + githubAccessToken);
+        HttpEntity<String> requestUser = new HttpEntity<>(null, headers);
+        ResponseEntity<GithubUserDTO> githubResponse = restTemplate.exchange(getUserUrl, HttpMethod.GET, requestUser, GithubUserDTO.class);
+        GithubUserDTO githubUser = githubResponse.getBody();
 
-            // 깃허브는 이메일 정보는 따로 요청해야 한다...
-            String getEmailUrl = "https://api.github.com/user/emails";
-            HttpEntity<String> requestEmail = new HttpEntity<>(null, headers);
-            ResponseEntity<List<GithubEmailDTO>> emailResponse = restTemplate.exchange(getEmailUrl, HttpMethod.GET, requestEmail, new ParameterizedTypeReference<List<GithubEmailDTO>>() {
-            });
-            List<GithubEmailDTO> emails = emailResponse.getBody();
-            String primaryEmail = emails.isEmpty() ? "이메일 없음" : emails.get(0).getEmail();
+        // 깃허브는 이메일 정보는 따로 요청해야 한다...
+        String getEmailUrl = "https://api.github.com/user/emails";
+        HttpEntity<String> requestEmail = new HttpEntity<>(null, headers);
+        ResponseEntity<List<GithubEmailDTO>> emailResponse = restTemplate.exchange(getEmailUrl, HttpMethod.GET, requestEmail, new ParameterizedTypeReference<List<GithubEmailDTO>>() {
+        });
+        List<GithubEmailDTO> emails = emailResponse.getBody();
+        String primaryEmail = emails.isEmpty() ? "이메일 없음" : emails.get(0).getEmail();
 
-            if(githubUser != null) {
-                OauthUserDTO oauthUserDTO = new OauthUserDTO();
-                oauthUserDTO.setUsername(githubUser.getName());
-                oauthUserDTO.setEmail(primaryEmail);
-                oauthUserDTO.setRole("USER");
-                oauthUserDTO.setPlatform("github");
-                return oauthUserDTO;
-            } else {
-                log.info("Cannot find Github User Info");
-                throw new CustomException("Cannot find Github User Info", "Client info not found", HttpStatus.BAD_REQUEST);
-            }
-        } catch (HttpClientErrorException e) {
-            throw new CustomException("SUPPLIER CODE ERROR", "The Code is unvalid or empty", HttpStatus.BAD_REQUEST);
+        if(githubUser != null) {
+            OauthUserDTO oauthUserDTO = new OauthUserDTO();
+            oauthUserDTO.setUsername(githubUser.getName());
+            oauthUserDTO.setEmail(primaryEmail);
+            oauthUserDTO.setRole("USER");
+            oauthUserDTO.setPlatform("github");
+            return oauthUserDTO;
+        } else {
+            log.info("Cannot find Github User Info");
+            throw new CustomException("Cannot find Github User Info", "Client info not found", HttpStatus.BAD_REQUEST);
         }
     }
 

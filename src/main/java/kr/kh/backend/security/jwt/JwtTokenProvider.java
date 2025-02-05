@@ -95,8 +95,9 @@ public class JwtTokenProvider {
         token.setStatus(TokenStatus.VALID);
         token.setExpirationDate(refreshExpiration);
         int result = tokenMapper.saveToken(token);
-
-        log.info("리프레시 토큰 저장 완료 ? {}", refreshToken, result == 1 ? "YES" : "NO");
+        if(result != 1) {
+            throw new CustomException("Failed Insert Refresh Token", "Failed Save Token", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
 
         return JwtToken.builder()
                 .grantType("Bearer")

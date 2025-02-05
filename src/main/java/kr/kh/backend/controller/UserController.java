@@ -12,6 +12,7 @@ import kr.kh.backend.dto.oauth2.OauthLoginDTO;
 import kr.kh.backend.dto.oauth2.OauthUserDTO;
 import kr.kh.backend.dto.security.JwtToken;
 import kr.kh.backend.dto.security.LoginDTO;
+import kr.kh.backend.exception.CustomException;
 import kr.kh.backend.mapper.UserMapper;
 import kr.kh.backend.security.jwt.JwtTokenProvider;
 import kr.kh.backend.service.security.EmailVerificationService;
@@ -28,6 +29,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.HashMap;
@@ -207,60 +209,72 @@ public class UserController {
     @Operation(summary = "네이버 소셜 로그인", description = "OAuth2 인증을 통한 소셜 로그인 및 JWT 생성")
     @PostMapping("/login/naver")
     public ResponseEntity<?> loginNaver(@RequestBody OauthLoginDTO oauthLoginDTO, HttpServletResponse response) {
-        log.info("네이버 로그인 컨트롤러");
+        try {
+            // 네이버에서 사용자 정보 조회
+            OauthUserDTO oauthUserDTO = oauth2UserService.getNaverUser(oauthLoginDTO.getCode(), oauthLoginDTO.getState());
 
-        // 네이버에서 사용자 정보 조회
-        OauthUserDTO oauthUserDTO = oauth2UserService.getNaverUser(oauthLoginDTO.getCode(), oauthLoginDTO.getState());
+            // DB 조회
+            Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
 
-        // DB 조회
-        Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
+            // JWT 토큰 생성
+            JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);
 
-        // JWT 토큰 생성
-        JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);
+            // HttpOnly 쿠키에 리프레시 토큰 넣어서 전송
+            Cookie refreshCookie = new Cookie("refreshToken", jwtToken.getRefreshToken());
+            refreshCookie.setHttpOnly(true);
+            refreshCookie.setMaxAge(24 * 60 * 60);
+            refreshCookie.setSecure(false);
+            refreshCookie.setPath("/");
+            response.addCookie(refreshCookie);
 
-        // HttpOnly 쿠키에 리프레시 토큰 넣어서 전송
-        Cookie refreshCookie = new Cookie("refreshToken", jwtToken.getRefreshToken());
-        refreshCookie.setHttpOnly(true);
-        refreshCookie.setMaxAge(24 * 60 * 60);
-        refreshCookie.setSecure(false);
-        refreshCookie.setPath("/");
-        response.addCookie(refreshCookie);
-
-        return ResponseEntity.ok()
-                .header("Authorization", "Bearer " + jwtToken.getAccessToken())
-                .header("Set-Cookie", "refreshToken=" + jwtToken.getRefreshToken()
-                        + "; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax" )
-                .build();
+            return ResponseEntity.ok()
+                    .header("Authorization", "Bearer " + jwtToken.getAccessToken())
+                    .header("Set-Cookie", "refreshToken=" + jwtToken.getRefreshToken()
+                            + "; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax")
+                    .build();
+        } catch (CustomException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(e.getHttpStatus()).build();
+        } catch (HttpClientErrorException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(e.getStatusCode()).build();
+        }
     }
 
     // 깃허브 로그인
     @Operation(summary = "깃허브 소셜 로그인", description = "OAuth2 인증을 통한 소셜 로그인 및 JWT 생성")
     @PostMapping("/login/github")
     public ResponseEntity<?> loginGithub(@RequestBody OauthLoginDTO oauthLoginDTO, HttpServletResponse response) {
-        log.info("깃허브 로그인 컨트롤러");
+        try {
+            // 깃허브에서 사용자 정보 조회
+            OauthUserDTO oauthUserDTO = oauth2UserService.getGithubUser(oauthLoginDTO.getCode());
 
-        // 깃허브에서 사용자 정보 조회
-        OauthUserDTO oauthUserDTO = oauth2UserService.getGithubUser(oauthLoginDTO.getCode());
+            // DB 조회
+            Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
 
-        // DB 조회
-        Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
+            // JWT 토큰 생성
+            JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);
 
-        // JWT 토큰 생성
-        JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);
+            // HttpOnly 쿠키에 리프레시 토큰 넣어서 전송
+            Cookie refreshCookie = new Cookie("refreshToken", jwtToken.getRefreshToken());
+            refreshCookie.setHttpOnly(true);
+            refreshCookie.setMaxAge(24 * 60 * 60);
+            refreshCookie.setSecure(false);
+            refreshCookie.setPath("/");
+            response.addCookie(refreshCookie);
 
-        // HttpOnly 쿠키에 리프레시 토큰 넣어서 전송
-        Cookie refreshCookie = new Cookie("refreshToken", jwtToken.getRefreshToken());
-        refreshCookie.setHttpOnly(true);
-        refreshCookie.setMaxAge(24 * 60 * 60);
-        refreshCookie.setSecure(false);
-        refreshCookie.setPath("/");
-        response.addCookie(refreshCookie);
-
-        return ResponseEntity.ok()
-                .header("Authorization", "Bearer " + jwtToken.getAccessToken())
-                .header("Set-Cookie", "refreshToken=" + jwtToken.getRefreshToken()
-                        + "; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax" )
-                .build();
+            return ResponseEntity.ok()
+                    .header("Authorization", "Bearer " + jwtToken.getAccessToken())
+                    .header("Set-Cookie", "refreshToken=" + jwtToken.getRefreshToken()
+                            + "; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax")
+                    .build();
+        } catch (CustomException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(e.getHttpStatus()).build();
+        } catch (HttpClientErrorException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(e.getStatusCode()).build();
+        }
     }
 
     // 토큰 재발급
