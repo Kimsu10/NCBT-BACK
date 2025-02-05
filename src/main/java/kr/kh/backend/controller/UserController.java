@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import kr.kh.backend.dto.EmailVerificationDTO;
 import kr.kh.backend.domain.User;
 import kr.kh.backend.dto.oauth2.OauthLoginDTO;
+import kr.kh.backend.dto.oauth2.OauthUserDTO;
 import kr.kh.backend.dto.security.JwtToken;
 import kr.kh.backend.dto.security.LoginDTO;
 import kr.kh.backend.mapper.UserMapper;
@@ -209,10 +210,10 @@ public class UserController {
         log.info("네이버 로그인 컨트롤러");
 
         // 네이버에서 사용자 정보 조회
-        Authentication authentication = oauth2UserService.getNaverUser(oauthLoginDTO.getCode(), oauthLoginDTO.getState());
-        if(authentication == null) {
-            return ResponseEntity.status(400).build();
-        }
+        OauthUserDTO oauthUserDTO = oauth2UserService.getNaverUser(oauthLoginDTO.getCode(), oauthLoginDTO.getState());
+
+        // DB 조회
+        Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
 
         // JWT 토큰 생성
         JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);
@@ -238,11 +239,11 @@ public class UserController {
     public ResponseEntity<?> loginGithub(@RequestBody OauthLoginDTO oauthLoginDTO, HttpServletResponse response) {
         log.info("깃허브 로그인 컨트롤러");
 
-        // 네이버에서 사용자 정보 조회
-        Authentication authentication = oauth2UserService.getGithubUser(oauthLoginDTO.getCode());
-        if(authentication == null) {
-            return ResponseEntity.status(400).build();
-        }
+        // 깃허브에서 사용자 정보 조회
+        OauthUserDTO oauthUserDTO = oauth2UserService.getGithubUser(oauthLoginDTO.getCode());
+
+        // DB 조회
+        Authentication authentication = oauth2UserService.loadOauthUser(oauthUserDTO);
 
         // JWT 토큰 생성
         JwtToken jwtToken = jwtTokenProvider.generateToken(authentication);

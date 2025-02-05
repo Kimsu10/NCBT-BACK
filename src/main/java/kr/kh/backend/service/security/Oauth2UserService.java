@@ -53,7 +53,7 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
      * 네이버 로그인
      * 로그인한 사용자 정보가 디비에 있는지 확인 후 유저 정보 리턴.
      */
-    public Authentication getNaverUser(String code, String state) {
+    public OauthUserDTO getNaverUser(String code, String state) {
         log.info("네이버 로그인 서비스");
         RestTemplate restTemplate = new RestTemplate();
 
@@ -75,46 +75,23 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
         ResponseEntity<Map> naverResponse = restTemplate.exchange(getUserUrl, HttpMethod.GET, request, Map.class);
         Map<String, String> naverUser = (Map) naverResponse.getBody().get("response");
 
-        // 네이버 사용자 정보가 디비에 있는지 확인
         if(naverUser != null) {
-            String username = naverUser.get("nickname");
-            String email = naverUser.get("email");
-            String role = "USER";
-
-            User user = userMapper.findByEmail(email);
-
-            if(user == null) {
-                user = User.builder()
-                        .nickname(username)
-                        .email(email)
-                        .platform("naver")
-                        .roles(role)
-                        .build();
-                userMapper.insertOauthUser(user);
-                log.info("새로운 oauth2 유저를 등록했습니다 : {}", user);
-            }
-
-            if (user != null && user.getPlatform() == null) {
-                log.info("이미 등록된 이메일입니다.");
-                throw new CustomException("이미 등록된 이메일입니다.", "ERROR CODE 401", HttpStatus.UNAUTHORIZED);
-            }
-
-            Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            log.info("oauth2 유저가 인증되었습니다 = {}", authentication);
-
-            return authentication;
-
+            OauthUserDTO oauthUserDTO = new OauthUserDTO();
+            oauthUserDTO.setUsername(naverUser.get("nickname"));
+            oauthUserDTO.setEmail(naverUser.get("email"));
+            oauthUserDTO.setRole("USER");
+            oauthUserDTO.setPlatform("naver");
+            return oauthUserDTO;
         } else {
-            log.info("네이버 사용자의 정보를 확인할 수 없습니다.");
-            return null;
+            log.info("Cannot find Naver User Info");
+            throw new CustomException("Cannot find Naver User Info", "Client info not found", HttpStatus.BAD_REQUEST);
         }
     }
 
     /**
      * 깃허브 로그인
      */
-    public Authentication getGithubUser(String code) {
+    public OauthUserDTO getGithubUser(String code) {
         log.info("깃허브 로그인 서비스");
         RestTemplate restTemplate = new RestTemplate();
 
@@ -153,41 +130,46 @@ public class Oauth2UserService extends DefaultOAuth2UserService {
             List<GithubEmailDTO> emails = emailResponse.getBody();
             String primaryEmail = emails.isEmpty() ? "이메일 없음" : emails.get(0).getEmail();
 
-            // 깃허브 사용자 정보가 디비에 있는지 확인
-            if (githubUser != null) {
-                String username = githubUser.getName();
-                String email = primaryEmail;
-                String role = "USER";
-
-                User user = userMapper.findByEmail(email);
-                if (user == null) {
-                    user = User.builder()
-                            .nickname(username)
-                            .email(email)
-                            .platform("github")
-                            .roles(role)
-                            .build();
-                    userMapper.insertOauthUser(user);
-                    log.info("새로운 oauth2 유저를 등록했습니다 : {}", user);
-                }
-
-                if (user != null && user.getPlatform() == null) {
-                    log.info("이미 등록된 이메일입니다.");
-                    throw new CustomException("이미 등록된 이메일입니다.", "ERROR CODE 401", HttpStatus.UNAUTHORIZED);
-                }
-
-                Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.info("oauth2 유저가 인증되었습니다 = {}", authentication);
-
-                return authentication;
+            if(githubUser != null) {
+                OauthUserDTO oauthUserDTO = new OauthUserDTO();
+                oauthUserDTO.setUsername(githubUser.getName());
+                oauthUserDTO.setEmail(primaryEmail);
+                oauthUserDTO.setRole("USER");
+                oauthUserDTO.setPlatform("github");
+                return oauthUserDTO;
             } else {
-                log.info("깃허브 사용자의 정보를 확인할 수 없습니다.");
-                return null;
+                log.info("Cannot find Github User Info");
+                throw new CustomException("Cannot find Github User Info", "Client info not found", HttpStatus.BAD_REQUEST);
             }
         } catch (HttpClientErrorException e) {
             throw new CustomException("SUPPLIER CODE ERROR", "The Code is unvalid or empty", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    public Authentication loadOauthUser(OauthUserDTO oauthUserDTO) {
+        User user = userMapper.findByEmail(oauthUserDTO.getEmail());
+
+        if(user == null) {
+            user = User.builder()
+                    .nickname(oauthUserDTO.getUsername())
+                    .email(oauthUserDTO.getEmail())
+                    .platform(oauthUserDTO.getPlatform())
+                    .roles(oauthUserDTO.getRole())
+                    .build();
+            userMapper.insertOauthUser(user);
+        }
+
+        if (user != null && user.getPlatform() == null) {
+            log.info("Email already exists");
+            throw new CustomException("Email already exists", "ERROR CODE 401", HttpStatus.UNAUTHORIZED);
+        }
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        log.info("oauth2 유저가 인증되었습니다 = {}", authentication);
+
+        return authentication;
+
     }
 
     /**
